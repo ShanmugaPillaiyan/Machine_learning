@@ -1,0 +1,116 @@
+---
+title: "Human Activity Recognition"
+author: "Shanmuga"
+date: "20 July 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Human Activity Recognition
+
+## Load raw data
+
+```{r}
+library(caret)
+library(rattle)
+library(e1071)
+library(ggplot2)
+library(C50)
+
+trainData <- read.csv("pml-training.csv",na.strings=c("NA","#DIV/0!",""))
+testData <- read.csv("pml-testing.csv",na.strings=c("NA","#DIV/0!",""))
+```
+
+## Clean the raw data
+
+Remove first column that is not required - running number
+```{r}
+cleanTrainData <- trainData[c(-1)]
+```
+
+Find NA values and exclude
+```{r}
+notNA <- sapply(cleanTrainData,function(i){sum(is.na(i))/length(i)})<0.9
+cleanTrainData <- cleanTrainData[, notNA]
+```
+
+Remove near zero variance columns/variables
+```{r}
+nzv <- nearZeroVar(cleanTrainData, saveMetrics=TRUE)
+cleanTrainData <- cleanTrainData[,nzv$nzv==FALSE]
+```
+
+Drop unnecessary columns from the testing dataset
+```{r}
+columnNames <- colnames(cleanTrainData[,-58]) # remove class column.
+cleanTestData <- testData[columnNames]
+```
+
+Split the training set into a training and validation set.
+```{r}
+intrain<-createDataPartition(y=cleanTrainData$classe,p=0.7,list=FALSE)
+training<-cleanTrainData[intrain,]
+testing<-cleanTrainData[-intrain,]
+```
+
+
+### Cross Validation to select the best model performance
+
+```{r}
+fitControl <- trainControl(method = "cv", number = 10, repeats = 0,savePred=T, classProb=T)
+
+modelHAR_1 <- train(classe~., data = training, method = "rpart", trControl= fitControl)
+modelHAR_2 <- train(classe~., data = training, method = "rpart1SE", trControl= fitControl)
+modelHAR_3 <- train(classe~., data = training, method = "C5.0Tree", trControl= fitControl)
+```
+
+Confusion martix
+```{r}
+activity_1 <- predict(modelHAR_1, newdata = testing[,-58])
+conMatrix_1 <- confusionMatrix(activity_1, testing$classe)
+conMatrix_1
+```
+
+```{r}
+activity_2 <- predict(modelHAR_1, newdata = training[,-58])
+conMatrix_2 <- confusionMatrix(activity_2, training$classe)
+conMatrix_2
+```
+
+```{r}
+activity_3 <- predict(modelHAR_3, newdata = training[,-58])
+conMatrix_3 <- confusionMatrix(activity_3, training$classe)
+conMatrix_3
+```
+As the "C5.0Tree" has the highest accuracy (0.9972) when predicting the test data. we select this model to build our final model.
+
+
+### Build final model
+Final model is build with the "C5.0Tree" algorithm using the entire training data set.
+
+```{r}
+fitControl <- trainControl(method = "cv", number = 10, repeats = 0,savePred=T, classProb=T)
+modelHAR_F <- train(classe~., data = cleanTrainData, method = "C5.0Tree", trControl= fitControl)
+```
+
+
+### Perform prediction with final model
+```{r}
+act_prediction <- predict(modelHAR_F, newdata = cleanTestData)
+
+```
+
+The predistions obtained are:
+```{r}
+act_prediction
+```
+
+
+
+
+
+
+
